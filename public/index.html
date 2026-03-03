@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Magic Link POC — Crisp Assessment</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f5f7fa; color: #1a1a2e; min-height: 100vh;
+      display: flex; justify-content: center; padding: 2rem;
+    }
+    .container { max-width: 720px; width: 100%; }
+    h1 { font-size: 1.75rem; margin-bottom: 0.25rem; }
+    .subtitle { color: #666; margin-bottom: 2rem; font-size: 0.95rem; }
+    .card {
+      background: #fff; border-radius: 12px; padding: 1.5rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08); margin-bottom: 1.5rem;
+    }
+    .card h2 { font-size: 1.1rem; margin-bottom: 1rem; color: #2d3748; }
+    .badge {
+      display: inline-block; font-size: 0.7rem; padding: 2px 8px;
+      border-radius: 9999px; font-weight: 600; text-transform: uppercase;
+      vertical-align: middle; margin-left: 0.5rem;
+    }
+    .badge-db { background: #ebf5ff; color: #2b6cb0; }
+    .badge-hmac { background: #f0fff4; color: #276749; }
+    label { display: block; font-size: 0.85rem; font-weight: 500; margin-bottom: 0.35rem; color: #4a5568; }
+    input[type="email"] {
+      width: 100%; padding: 0.6rem 0.75rem; border: 1px solid #cbd5e0;
+      border-radius: 8px; font-size: 0.95rem; outline: none;
+      transition: border-color 0.15s;
+    }
+    input[type="email"]:focus { border-color: #4299e1; }
+    .row { display: flex; gap: 0.75rem; margin-top: 0.75rem; }
+    button {
+      padding: 0.6rem 1.25rem; border: none; border-radius: 8px;
+      font-size: 0.9rem; font-weight: 500; cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+    }
+    button:active { transform: scale(0.97); }
+    .btn-primary { background: #4299e1; color: #fff; }
+    .btn-primary:hover { background: #3182ce; }
+    .btn-secondary { background: #48bb78; color: #fff; }
+    .btn-secondary:hover { background: #38a169; }
+    .output {
+      margin-top: 1rem; padding: 1rem; background: #f7fafc;
+      border: 1px solid #e2e8f0; border-radius: 8px;
+      font-family: "SF Mono", "Fira Code", monospace; font-size: 0.82rem;
+      white-space: pre-wrap; word-break: break-all; display: none;
+      max-height: 400px; overflow-y: auto; line-height: 1.5;
+    }
+    .output.visible { display: block; }
+    .users-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0.75rem; }
+    .user-chip {
+      padding: 0.6rem 0.85rem; background: #edf2f7; border-radius: 8px;
+      cursor: pointer; transition: background 0.15s; font-size: 0.88rem;
+    }
+    .user-chip:hover { background: #e2e8f0; }
+    .user-chip .name { font-weight: 600; }
+    .user-chip .email { color: #718096; font-size: 0.8rem; }
+    .section-title { font-size: 0.8rem; font-weight: 600; color: #a0aec0;
+      text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.75rem; }
+    a { color: #4299e1; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .link-box {
+      display: block; margin-top: 0.5rem; padding: 0.5rem 0.75rem;
+      background: #fffff0; border: 1px solid #ecc94b; border-radius: 6px;
+      font-size: 0.82rem; word-break: break-all;
+    }
+    .step { display: flex; align-items: flex-start; gap: 0.75rem; margin-bottom: 1rem; }
+    .step-num {
+      flex-shrink: 0; width: 28px; height: 28px; border-radius: 50%;
+      background: #4299e1; color: #fff; display: flex; align-items: center;
+      justify-content: center; font-size: 0.8rem; font-weight: 700;
+    }
+    .step-text { font-size: 0.9rem; line-height: 1.45; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>Magic Link Authentication POC</h1>
+  <p class="subtitle">Crisp Technical Assessment — Exercise 1</p>
+
+  <!-- How it works -->
+  <div class="card">
+    <h2>How it works</h2>
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-text">Enter your email below (or click a demo user). A magic link token is generated and its <strong>SHA-256 hash</strong> is stored in Postgres.</div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-text">The raw token (never stored) is embedded in a URL. In production this URL is emailed; here we display it directly.</div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-text">Clicking the link verifies the token by hashing it and looking up the hash. If valid &amp; unexpired, a session is created.</div>
+    </div>
+  </div>
+
+  <!-- Demo Users -->
+  <div class="card">
+    <p class="section-title">Demo Users (click to autofill)</p>
+    <div class="users-grid" id="usersGrid">
+      <div class="user-chip" onclick="fillEmail('alice@example.com')">
+        <div class="name">Alice</div><div class="email">alice@example.com</div>
+      </div>
+      <div class="user-chip" onclick="fillEmail('bob@example.com')">
+        <div class="name">Bob</div><div class="email">bob@example.com</div>
+      </div>
+      <div class="user-chip" onclick="fillEmail('charlie@example.com')">
+        <div class="name">Charlie</div><div class="email">charlie@example.com</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Request Magic Link -->
+  <div class="card">
+    <h2>Request a Magic Link</h2>
+    <label for="email">Email address</label>
+    <input type="email" id="email" placeholder="alice@example.com">
+    <div class="row">
+      <button class="btn-primary" onclick="requestLink('stateful')">
+        Database-backed <span class="badge badge-db">Stateful</span>
+      </button>
+      <button class="btn-secondary" onclick="requestLink('stateless')">
+        HMAC-signed <span class="badge badge-hmac">Stateless</span>
+      </button>
+    </div>
+    <div class="output" id="requestOutput"></div>
+  </div>
+
+  <!-- Verify Token -->
+  <div class="card">
+    <h2>Verify Token</h2>
+    <p style="font-size:0.88rem;color:#718096;margin-bottom:0.75rem;">
+      Click a generated link above, or paste a verification URL here:
+    </p>
+    <input type="email" id="verifyUrl" placeholder="Paste full verify URL here..." style="margin-bottom:0.75rem;">
+    <button class="btn-primary" onclick="verifyManual()">Verify</button>
+    <div class="output" id="verifyOutput"></div>
+  </div>
+
+  <!-- Token Audit Log -->
+  <div class="card">
+    <h2>Token Audit Log</h2>
+    <button class="btn-primary" onclick="loadTokens()" style="margin-bottom:0.75rem;">Refresh</button>
+    <div class="output visible" id="tokensOutput" style="display:block;background:#fff;">Loading...</div>
+  </div>
+</div>
+
+<script>
+function fillEmail(email) {
+  document.getElementById("email").value = email;
+}
+
+async function requestLink(mode) {
+  const email = document.getElementById("email").value.trim();
+  if (!email) return alert("Please enter an email address");
+  const out = document.getElementById("requestOutput");
+  out.classList.add("visible");
+  out.textContent = "Requesting...";
+
+  const endpoint = mode === "stateful"
+    ? "/api/magic-link/request"
+    : "/api/magic-link/stateless/request";
+
+  try {
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    const data = await res.json();
+    let text = `Mode: ${mode.toUpperCase()}\n`;
+    text += `Response: ${data.message}\n`;
+    if (data._debug) {
+      text += `\nLogin URL:\n`;
+      const url = data._debug.loginUrl;
+      out.innerHTML = text + `<a class="link-box" href="${url}" onclick="event.preventDefault(); verifyLink('${url}')">${url}</a>`
+        + `\n\nExpires: ${new Date(data._debug.expiresAt || data._debug.expiresAt).toLocaleString()}`;
+    } else {
+      out.textContent = text;
+    }
+  } catch (err) {
+    out.textContent = "Error: " + err.message;
+  }
+}
+
+async function verifyLink(url) {
+  const out = document.getElementById("verifyOutput");
+  out.classList.add("visible");
+  out.textContent = "Verifying...";
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+    out.textContent = JSON.stringify(data, null, 2);
+  } catch (err) {
+    out.textContent = "Error: " + err.message;
+  }
+}
+
+function verifyManual() {
+  const url = document.getElementById("verifyUrl").value.trim();
+  if (!url) return alert("Paste a verify URL first");
+  verifyLink(url);
+}
+
+async function loadTokens() {
+  const out = document.getElementById("tokensOutput");
+  try {
+    const res = await fetch("/api/tokens");
+    const data = await res.json();
+    if (data.length === 0) {
+      out.textContent = "No tokens yet. Request a magic link above!";
+      return;
+    }
+    out.textContent = data.map(t =>
+      `${t.email.padEnd(22)} | created: ${new Date(t.created_at).toLocaleString().padEnd(22)} | ` +
+      `expires: ${new Date(t.expires_at).toLocaleString().padEnd(22)} | ` +
+      `used: ${t.used_at ? new Date(t.used_at).toLocaleString() : "—"}`
+    ).join("\n");
+  } catch (err) {
+    out.textContent = "Error loading tokens: " + err.message;
+  }
+}
+
+loadTokens();
+</script>
+</body>
+</html>
