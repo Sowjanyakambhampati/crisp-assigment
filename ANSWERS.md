@@ -1,9 +1,9 @@
 # Crisp Technical Assessment — Answers
 
-> **Note on LLM usage**: I used an LLM (Claude) as a coding assistant to help
+> **Note on LLM usage**: I used an LLM  as a coding assistant to help
 > scaffold the Express server, write the HTML frontend, and format this
 > document. All architectural decisions, security reasoning, and technical
-> analysis are my own thinking. The LLM was used primarily for productivity —
+> analysis are my own thinking. The LLM was used primarily for productivity 
 > generating boilerplate, not for the core reasoning.
 
 ---
